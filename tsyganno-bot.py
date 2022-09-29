@@ -1,4 +1,7 @@
 import logging
+import sqlite3
+import os
+import time
 from aiogram import Bot, Dispatcher, types, executor
 from deepface import DeepFace
 
@@ -10,6 +13,18 @@ logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
+
+
+conn = sqlite3.connect('bd/database.db', check_same_thread=False)
+cursor = conn.cursor()
+
+
+def db_table_val(user_id: int, user_name: str, user_surname: str, username: str, time_user: str, message: str, photo: str):
+    cursor.execute(
+        'INSERT INTO data (user_id, user_name, user_surname, username, time_user, message, photo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (user_id, user_name, user_surname, username, time_user, message, photo)
+    )
+    conn.commit()
 
 
 def face_analyze(image_path):
@@ -94,36 +109,49 @@ async def send_welcome(message: types.Message):
                         'Загрузи свою фотку или фотку друга, чье описание ты хочешь получить... =)')
 
 
-@dp.message_handler(content_types=['photo'])
+@dp.message_handler(content_types=['photo', 'text'])
 async def scan_message(message: types.Message):
-    document_id = message.photo[0].file_id
-    file_info = await bot.get_file(document_id)
-    path = f'http://api.telegram.org/file/bot{API_TOKEN}/{file_info.file_path}'
-    answer = face_analyze(path)
-    if type(answer) == dict:
-        word = ''
-        for key, value in answer.items():
-            if key == 'Race':
-                word += 'У вас обнаружены черты следующих народностей:' + '\n'
-                for el in value:
-                    word += el + '\n'
-                word += '\n'
-            elif key == 'Emotions':
-                word += 'У вас обнаружены следующие эмоции:' + '\n'
-                for el in value:
-                    word += el + '\n'
-                word += '\n'
-            elif key == 'Age':
-                word += 'Возраст:' + ' ' + str(value) + '\n' + '\n'
-            elif key == 'Gender':
-                if value == 'Man':
-                    word += 'Пол:' + ' ' + 'Мужчина' + '\n' + '\n'
-                else:
-                    word += 'Пол:' + ' ' + 'Женщина' + '\n' + '\n'
+    time_user = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+    message_user = message.text
+    us_id = message.from_user.id
+    us_name = message.from_user.first_name
+    us_sname = message.from_user.last_name
+    username = message.from_user.username
 
-        await message.answer(word)
+    if message.photo[0].file_id:
+        path = os.path.join('photos', str(username), message.photo[-1].file_unique_id + '.jpg')
+        await message.photo[-1].download(destination_file=path)
+        document_id = message.photo[0].file_id
+        file_info = await bot.get_file(document_id)
+        path = f'http://api.telegram.org/file/bot{API_TOKEN}/{file_info.file_path}'
+        answer = face_analyze(path)
+        db_table_val(user_id=us_id, user_name=us_name, user_surname=us_sname, username=username, time_user=time_user, message=message_user, photo=str(message.photo[-1]))
+        if type(answer) == dict:
+            word = ''
+            for key, value in answer.items():
+                if key == 'Race':
+                    word += 'У вас обнаружены черты следующих народностей:' + '\n'
+                    for el in value:
+                        word += el + '\n'
+                    word += '\n'
+                elif key == 'Emotions':
+                    word += 'У вас обнаружены следующие эмоции:' + '\n'
+                    for el in value:
+                        word += el + '\n'
+                    word += '\n'
+                elif key == 'Age':
+                    word += 'Возраст:' + ' ' + str(value) + '\n' + '\n'
+                elif key == 'Gender':
+                    if value == 'Man':
+                        word += 'Пол:' + ' ' + 'Мужчина' + '\n' + '\n'
+                    else:
+                        word += 'Пол:' + ' ' + 'Женщина' + '\n' + '\n'
+
+            await message.answer(word)
+        else:
+            await message.answer(answer)
     else:
-        await message.answer(answer)
+        db_table_val(user_id=us_id, user_name=us_name, user_surname=us_sname, username=username, time_user=time_user,message=message_user, photo='нет данных')
 
 
 if __name__ == '__main__':
