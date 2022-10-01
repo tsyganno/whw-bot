@@ -36,7 +36,7 @@ example_cities = [
 
 
 API_TOKEN = 'key'
-owm = OWM('key_owm')
+owm = OWM('one_key')
 
 mgr = owm.weather_manager()
 logging.basicConfig(level=logging.INFO)
@@ -192,22 +192,24 @@ def face_analyze(image_path):
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     keyboard = types.ReplyKeyboardMarkup(
-        row_width=3,
+        row_width=2,
         resize_keyboard=True,
         one_time_keyboard=True
     )
     button_1 = types.KeyboardButton('/Погода')
     button_2 = types.KeyboardButton('/Гороскоп')
-    button_3 = types.KeyboardButton('/Пожелание')
     keyboard.add(
         button_1,
         button_2,
-        button_3
     )
-    await message.reply('Привет, меня зовут Йозеф, и я телеграм-бот :)\n '
-                        'Загрузи свою фотку или фотку друга, чье описание ты хочешь получить... \n '
-                        'Узнай погоду в своем городе, ну или свой гороскоп по знаку зодиака =)',
-                        reply_markup=keyboard)
+    await message.reply(
+        'Привет, меня зовут Йозеф, и я телеграм-бот :)\n\n '
+        '1. Загрузи свою фотку или фотку друга, чье описание ты хочешь получить... \n\n '
+        '2. Ты можешь отправить мне письмо или пожелание и мой создатель его обязательно '
+        'прочтет, но имей ввиду что послание должно быть не короче 30 символов. \n\n '
+        '3. Узнай погоду в своем городе, ну или свой гороскоп по знаку зодиака =)',
+        reply_markup=keyboard
+    )
 
 
 @dp.message_handler(commands=['Погода'])
@@ -229,20 +231,22 @@ async def echo(message: types.Message):
 @dp.message_handler(commands=['Назад'])
 async def echo(message: types.Message):
     keyboard = types.ReplyKeyboardMarkup(
-        row_width=3,
+        row_width=2,
         resize_keyboard=True,
         one_time_keyboard=True
     )
     button_1 = types.KeyboardButton('/Погода')
     button_2 = types.KeyboardButton('/Гороскоп')
-    button_3 = types.KeyboardButton('/Пожелание')
     keyboard.add(
         button_1,
         button_2,
-        button_3
     )
     await message.reply(
-        'Ты вернулся в главное меню =)\nВыбери раздел: "Погода", "Гороскоп" на сегодня или "Пожелание".',
+        'Ты вернулся в главное меню :)\n\n '
+        '1. Загрузи свою фотку или фотку друга, чье описание ты хочешь получить... \n\n '
+        '2. Ты можешь отправить мне письмо или пожелание и мой создатель его обязательно '
+        'прочтет, но имей ввиду что послание должно быть не короче 30 символов. \n\n '
+        '3. Узнай погоду в своем городе, ну или свой гороскоп по знаку зодиака =)',
         reply_markup=keyboard
     )
 
@@ -256,7 +260,26 @@ async def echo(message: types.Message):
     else:
         data = city_weather(human_message)
         if data is None:
-            await message.answer('Введите корректные данные.')
+            if len(human_message) <= 25:
+                await message.answer('Введите корректное название населенного пункта.')
+            else:
+                time_user = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+                message_user = message.text
+                us_id = message.from_user.id
+                us_name = message.from_user.first_name
+                us_sname = message.from_user.last_name
+                username = message.from_user.username
+                db_table_val(
+                    user_id=us_id,
+                    user_name=us_name,
+                    user_surname=us_sname,
+                    username=username,
+                    time_user=time_user,
+                    message=message_user,
+                    photo='нет данных'
+                )
+                await message.answer('Благодарю за послание =) Удачного дня, мой друг!')
+
         else:
             output_message = f'Температура сейчас: {data["temp"]}\nМаксимальная температура сегодня: ' \
                              f'{data["temp_max"]}\n'f'Минимальная температура сегодня: ' \
