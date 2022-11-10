@@ -6,10 +6,18 @@ import requests
 from aiogram import Bot, Dispatcher, types, executor
 from bs4 import BeautifulSoup
 from deepface import DeepFace
-from pyowm import OWM
-from pyowm.commons import exceptions
-from transliterate import translit
+from translate import Translator
 
+
+days = [
+    'понедельник',
+    'вторник',
+    'среда',
+    'четверг',
+    'пятница',
+    'суббота',
+    'воскресенье'
+]
 
 sign_of_horoscope = [
     'Овен',
@@ -27,17 +35,20 @@ sign_of_horoscope = [
 ]
 example_cities = [
     'Москва',
-    'Санкт-Петербург',
+    'Владивосток',
     'Иркутск',
     'Улан-Удэ',
     'Новосибирск',
+    'Красноярск',
+    'Чита',
+    'Хабаровск',
+    'Томск',
+    'Екатеринбург',
+    'Сочи',
     'Краснодар'
 ]
 
 API_TOKEN = getenv('TOKEN')
-owm = OWM(getenv('OWM'))
-
-mgr = owm.weather_manager()
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -66,12 +77,22 @@ def get_horoscope(answer):
 def city_weather(human_message):
     """ Производим транслитерацию с русского языка на английский,
     пытаемся получить данные погодных условий по переданному названию города"""
-    city = translit(human_message, "ru", reversed=True) + ', RU'
-    try:
-        observation = mgr.weather_at_place(city)
-    except exceptions.NotFoundError:
-        return None
-    return observation.weather.temperature('celsius')
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+    translator = Translator(from_lang='Russian', to_lang='English')
+    city = translator.translate(human_message)
+    res = requests.get(f'https://www.google.com/search?q={city}&oq={city}&aqs=chrome.0.35i39l2j0l4j46j69i60.6128j1j7&sourceid=chrome&ie=UTF-8', headers=headers)
+    soup = BeautifulSoup(res.text, 'html.parser')
+    info_weather = str(soup.find('span', {'class': 'LrzXr kno-fv wHYlTd z8gr9e wKYGZc'}))
+    weather_value = info_weather[info_weather.find('wKYGZc">') + 8: info_weather.find('</span>')]
+    time_value = 'Нет данных.'
+    array_time = soup.find_all('span', {'class': 'LrzXr kno-fv wHYlTd z8gr9e'})
+    for el in array_time:
+        for day in days:
+            if day in str(el):
+                str_el = str(el)
+                time_value = str_el[str_el.find('z8gr9e">') + 8: str_el.find('</span>')]
+                break
+    return weather_value, time_value
 
 
 def keyboard_sign_of_horoscope():
@@ -258,7 +279,7 @@ async def echo(message: types.Message):
         await message.answer(get_horoscope(human_message))
     else:
         data = city_weather(human_message)
-        if data is None:
+        if 'Нет данных.' in data[1] or 'class' in data[0]:
             if len(human_message) <= 25:
                 await message.answer('Введите корректное название населенного пункта.')
             else:
@@ -280,9 +301,10 @@ async def echo(message: types.Message):
                 await message.answer('Благодарю за послание =) Удачного дня, мой друг!')
 
         else:
-            output_message = f'Температура сейчас: {data["temp"]}\nМаксимальная температура сегодня: ' \
-                             f'{data["temp_max"]}\n'f'Минимальная температура сегодня: ' \
-                             f'{data["temp_min"]}\nОщущается как: {data["feels_like"]}'
+            weather_data = data[0]
+            time_data = data[1]
+
+            output_message = f'Погода: {weather_data}.\nМестное время: {time_data}.'
             await message.answer(output_message)
             await message.answer(
                 'Введите название города, который вас интересует.',
