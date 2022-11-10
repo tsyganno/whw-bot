@@ -8,7 +8,6 @@ from bs4 import BeautifulSoup
 from deepface import DeepFace
 from translate import Translator
 
-
 days = [
     'понедельник',
     'вторник',
